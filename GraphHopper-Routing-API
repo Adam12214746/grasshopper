@@ -1,0 +1,109 @@
+import requests
+import urllib.parse
+
+route_url = "https://graphhopper.com/api/1/route?"
+key = "bfccea8a-5217-4539-a2e0-679412c9dd86"  # Replace with your valid API key
+
+def geocoding(location, key):
+    while not location:
+        location = input("Enter the location again: ")
+
+    geocode_url = "https://graphhopper.com/api/1/geocode?"
+    url = geocode_url + urllib.parse.urlencode({"q": location, "limit": "1", "key": key})
+    try:
+        replydata = requests.get(url)
+        json_status = replydata.status_code
+        json_data = replydata.json()
+
+        if json_status == 200 and json_data["hits"]:
+            lat = json_data["hits"][0]["point"]["lat"]
+            lng = json_data["hits"][0]["point"]["lng"]
+            name = json_data["hits"][0]["name"]
+            value = json_data["hits"][0]["osm_value"]
+            country = json_data["hits"][0].get("country", "")
+            state = json_data["hits"][0].get("state", "")
+
+            if state and country:
+                new_loc = f"{name}, {state}, {country}"
+            elif state:
+                new_loc = f"{name}, {state}"
+            elif country:
+                new_loc = f"{name}, {country}"
+            else:
+                new_loc = name
+
+            print(f"Geocoding API URL for {new_loc} (Location Type: {value})\n{url}")
+            return json_status, lat, lng, new_loc
+        else:
+            print(f"Geocode API status: {json_status}\nError message: {json_data.get('message', 'Unknown error')}")
+            return json_status, None, None, location
+    except requests.RequestException as e:
+        print(f"Error making geocoding request: {e}")
+        return None, None, None, location
+
+def get_route(orig_lat, orig_lng, dest_lat, dest_lng):
+    op = f"&point={orig_lat}%2C{orig_lng}"
+    dp = f"&point={dest_lat}%2C{dest_lng}"
+    paths_url = route_url + urllib.parse.urlencode({"key": key}) + op + dp
+    try:
+        response = requests.get(paths_url)
+        paths_status = response.status_code
+        paths_data = response.json()
+
+        if paths_status == 200:
+            print(f"Routing API Status: {paths_status}")
+            print(f"Routing API URL:\n{paths_url}")
+            print("=================================================")
+            print(f"Directions from {orig_lat},{orig_lng} to {dest_lat},{dest_lng}")
+            print("=================================================")
+
+            distance = paths_data["paths"][0]["distance"]
+            duration = paths_data["paths"][0]["time"] // 1000
+
+            hr = duration // 3600
+            min = (duration % 3600) // 60
+            sec = duration % 60
+
+            print(f"Distance Traveled: {distance / 1609.34:.1f} miles / {distance / 1000:.1f} km")
+            print(f"Trip Duration: {hr:02d}:{min:02d}:{sec:02d}")
+            print("=================================================")
+
+            for each in range(len(paths_data["paths"][0]["instructions"])):
+                path = paths_data["paths"][0]["instructions"][each]["text"]
+                distance = paths_data["paths"][0]["instructions"][each]["distance"]
+                print(f"{path} ({distance / 1000:.2f} km / {distance / 1000 / 1.61:.2f} miles)")
+
+            print("=================================================")
+        else:
+            print(f"Routing API error with status: {paths_status}")
+    except requests.RequestException as e:
+        print(f"Error making routing request: {e}")
+
+def main():
+    while True:
+        try:
+            loc1 = input("Starting Location: ")
+            if loc1.lower() in ["q", "quit"]:
+                break
+            orig = geocoding(loc1, key)
+
+            if orig[0] == 200 and orig[1] and orig[2]:
+                loc2 = input("Destination: ")
+                if loc2.lower() in ["q", "quit"]:
+                    break
+                dest = geocoding(loc2, key)
+
+                if dest[0] == 200 and dest[1] and dest[2]:
+                    print("=================================================")
+                    get_route(orig[1], orig[2], dest[1], dest[2])
+                else:
+                    print(f"Invalid destination: {dest[3]}")
+            else:
+                print(f"Invalid starting location: {orig[3]}")
+
+        except KeyboardInterrupt:
+            print("\nProgram terminated.")
+            break
+
+if __name__ == "__main__":
+    main()
